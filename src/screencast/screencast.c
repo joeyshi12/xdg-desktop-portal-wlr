@@ -353,14 +353,16 @@ static int method_screencast_select_sources(sd_bus_message *msg, void *data,
 	logprint(INFO, "dbus: app_id: %s", app_id);
 
 	sess = NULL;
-	wl_list_for_each_reverse_safe(sess, tmp_s, &state->xdpw_sessions, link) {
-		if (strcmp(sess->session_handle, session_handle) == 0) {
-				logprint(DEBUG, "dbus: select sources: found matching session %s", sess->session_handle);
+	struct xdpw_session *iter;
+	wl_list_for_each_reverse_safe(iter, tmp_s, &state->xdpw_sessions, link) {
+		if (strcmp(iter->session_handle, session_handle) == 0) {
+				logprint(DEBUG, "dbus: select sources: found matching session %s", iter->session_handle);
+				sess = iter;
 				break;
 		}
 	}
 	if (!sess) {
-		logprint(WARN, "dbus: select sources: no matching session %s found", sess->session_handle);
+		logprint(WARN, "dbus: select sources: no matching session %s found", session_handle);
 		goto error;
 	}
 
@@ -578,11 +580,13 @@ static int method_screencast_start(sd_bus_message *msg, void *data,
 	}
 
 	struct xdpw_screencast_instance *cast = NULL;
-	struct xdpw_session *sess, *tmp_s;
-	wl_list_for_each_reverse_safe(sess, tmp_s, &state->xdpw_sessions, link) {
-		if (strcmp(sess->session_handle, session_handle) == 0) {
-				logprint(DEBUG, "dbus: start: found matching session %s", sess->session_handle);
+	struct xdpw_session *sess = NULL, *iter, *tmp_s;
+	wl_list_for_each_reverse_safe(iter, tmp_s, &state->xdpw_sessions, link) {
+		if (strcmp(iter->session_handle, session_handle) == 0) {
+				logprint(DEBUG, "dbus: start: found matching session %s", iter->session_handle);
+				sess = iter;
 				cast = sess->screencast_data.screencast_instance;
+				break;
 		}
 	}
 	if (!cast) {
