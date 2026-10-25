@@ -160,7 +160,7 @@ bool setup_target(struct xdpw_screencast_context *ctx, struct xdpw_session *sess
 	}
 	target->with_cursor = sess->screencast_data.cursor_mode == EMBEDDED;
 	if (data) {
-		target_initialized = xdpw_wlr_target_from_data(ctx, target, data);
+		target_initialized = xdpw_wlr_target_from_data(ctx, target, data, type_mask);
 	}
 	if (!target_initialized) {
 		target_initialized = xdpw_wlr_target_chooser(ctx, target, type_mask);
@@ -417,7 +417,7 @@ static int method_screencast_select_sources(sd_bus_message *msg, void *data,
 				continue;
 			}
 			sd_bus_message_read(msg, "u", &restore_data.version);
-			if (restore_data.version == 1) {
+			if (restore_data.version == 1 || restore_data.version == 2) {
 				innerRet = sd_bus_message_enter_container(msg, 'v', "a{sv}");
 				if (innerRet < 0) {
 					return innerRet;
@@ -437,6 +437,15 @@ static int method_screencast_select_sources(sd_bus_message *msg, void *data,
 					if (strcmp(rdKey, "output_name") == 0) {
 						sd_bus_message_read(msg, "v", "s", &restore_data.output_name);
 						logprint(INFO, "dbus: option restore_data.output_name: %s", restore_data.output_name);
+					} else if (strcmp(rdKey, "toplevel_identifier") == 0) {
+						sd_bus_message_read(msg, "v", "s", &restore_data.toplevel_identifier);
+						logprint(INFO, "dbus: option restore_data.toplevel_identifier: %s", restore_data.toplevel_identifier);
+					} else if (strcmp(rdKey, "app_id") == 0) {
+						sd_bus_message_read(msg, "v", "s", &restore_data.app_id);
+						logprint(INFO, "dbus: option restore_data.app_id: %s", restore_data.app_id);
+					} else if (strcmp(rdKey, "title") == 0) {
+						sd_bus_message_read(msg, "v", "s", &restore_data.title);
+						logprint(INFO, "dbus: option restore_data.title: %s", restore_data.title);
 					} else {
 						logprint(WARN, "dbus: unknown option %s", rdKey);
 						sd_bus_message_skip(msg, "v");
@@ -703,12 +712,23 @@ static int method_screencast_start(sd_bus_message *msg, void *data,
 		return ret;
 	}
 	if (sess->screencast_data.persist_mode != PERSIST_NONE && cast->target->output) {
-		struct xdpw_screencast_restore_data restore_data;
-		restore_data.output_name = cast->target->output->name;
+		// Version 1, which xdpw releases that can't restore toplevels read as well
+		ret = sd_bus_message_append(reply, "{sv}",
+			"restore_data", "(suv)",
+			"wlroots", 1,
+			"a{sv}", 1, "output_name", "s", cast->target->output->name);
+		if (ret < 0) {
+			return ret;
+		}
+	} else if (sess->screencast_data.persist_mode != PERSIST_NONE && cast->target->toplevel) {
+		struct xdpw_toplevel *toplevel = cast->target->toplevel;
 		ret = sd_bus_message_append(reply, "{sv}",
 			"restore_data", "(suv)",
 			"wlroots", XDP_CAST_DATA_VER,
-			"a{sv}", 1, "output_name", "s", restore_data.output_name);
+			"a{sv}", 3,
+			"toplevel_identifier", "s", toplevel->identifier ? toplevel->identifier : "",
+			"app_id", "s", toplevel->app_id ? toplevel->app_id : "",
+			"title", "s", toplevel->title ? toplevel->title : "");
 		if (ret < 0) {
 			return ret;
 		}

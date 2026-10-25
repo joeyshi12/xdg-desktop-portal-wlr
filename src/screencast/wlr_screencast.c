@@ -172,16 +172,63 @@ static struct xdpw_wlr_output *xdpw_wlr_output_find(struct xdpw_screencast_conte
 	return NULL;
 }
 
-bool xdpw_wlr_target_from_data(struct xdpw_screencast_context *ctx, struct xdpw_screencast_target *target,
-		struct xdpw_screencast_restore_data *data) {
-	struct xdpw_wlr_output *out = NULL;
-	out = xdpw_wlr_output_find_by_name(&ctx->output_list, data->output_name);
+static bool str_eq(const char *a, const char *b) {
+	return a && b && strcmp(a, b) == 0;
+}
 
-	if (!out) {
+static struct xdpw_toplevel *toplevel_from_data(struct xdpw_screencast_context *ctx,
+		struct xdpw_screencast_restore_data *data) {
+	struct xdpw_toplevel *toplevel;
+	if (data->toplevel_identifier) {
+		wl_list_for_each(toplevel, &ctx->toplevels, link) {
+			if (str_eq(toplevel->identifier, data->toplevel_identifier)) {
+				return toplevel;
+			}
+		}
+	}
+	// The identifier is gone, e.g. after a compositor restart: only take a toplevel with the
+	// same app_id and title, and only if it is the one such toplevel
+	if (!data->app_id || data->app_id[0] == '\0' || !data->title) {
+		return NULL;
+	}
+	struct xdpw_toplevel *match = NULL;
+	wl_list_for_each(toplevel, &ctx->toplevels, link) {
+		if (str_eq(toplevel->app_id, data->app_id) && str_eq(toplevel->title, data->title)) {
+			if (match) {
+				return NULL;
+			}
+			match = toplevel;
+		}
+	}
+	return match;
+}
+
+bool xdpw_wlr_target_from_data(struct xdpw_screencast_context *ctx, struct xdpw_screencast_target *target,
+		struct xdpw_screencast_restore_data *data, uint32_t type_mask) {
+	if (data->output_name) {
+		if (!(type_mask & MONITOR)) {
+			return false;
+		}
+		struct xdpw_wlr_output *out = xdpw_wlr_output_find_by_name(&ctx->output_list, data->output_name);
+		if (!out) {
+			return false;
+		}
+		target->type = MONITOR;
+		target->output = out;
+		return true;
+	}
+
+	if (!(type_mask & WINDOW)) {
 		return false;
 	}
-	target->type = MONITOR;
-	target->output = out;
+	struct xdpw_toplevel *toplevel = toplevel_from_data(ctx, data);
+	if (!toplevel) {
+		return false;
+	}
+	logprint(INFO, "wlroots: restoring toplevel %s app_id: %s title: %s",
+		toplevel->identifier, toplevel->app_id, toplevel->title);
+	target->type = WINDOW;
+	target->toplevel = toplevel;
 	return true;
 }
 

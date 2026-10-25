@@ -16,7 +16,9 @@
 // this backend is loaded and supplies pipewire-serial in the stream
 // dict.
 #define XDP_CAST_PROTO_VER 6
-#define XDP_CAST_DATA_VER 1
+// Restore data version 1 holds an output_name. Version 2 adds toplevels; releases that only
+// know version 1 skip it and prompt instead of looking up a missing output_name.
+#define XDP_CAST_DATA_VER 2
 
 enum cursor_modes {
   HIDDEN = 1,
@@ -153,6 +155,11 @@ struct xdpw_screencast_target {
 struct xdpw_screencast_restore_data {
 	uint32_t version;
 	const char *output_name;
+	// ext-foreign-toplevel-list identifier, only valid for the compositor's lifetime
+	const char *toplevel_identifier;
+	// To find the toplevel again after that, e.g. with permanent persistence
+	const char *app_id;
+	const char *title;
 };
 
 struct xdpw_format_modifier_pair {
